@@ -1,18 +1,29 @@
-<template></template>
+<template>
+	<div>
+		Center 
+	</div>
+</template>
 
 <script>
-export default {
-  name: "center",
-  computed: {
-    loginname: function() {
-      return this.$store.state.loginname;
-    }
-  },
-  created() {
-    this.$router.replace("/user/" + this.loginname);
-  }
-};
+	// import { mapState } from 'vuex';
+
+	export default{
+		name:"center",
+
+		computed: {
+			loginname() {
+				return this.$store.state.loginname
+			}
+		},
+
+		created() {
+			// 注意router跟route的区别
+			this.$router.replace('/user/'+this.loginname)
+		}
+
+	};
 </script>
 
 <style>
+	
 </style>

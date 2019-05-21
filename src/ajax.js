@@ -1,7 +1,8 @@
-import axios from 'axios'
+import axios from 'axios';
 
-const Axios = axios.create({
-  baseURL:'https://cnodejs.org/api/v1'
+// 创建ajax请求对象
+const request = axios.create({
+	baseURL:'https://cnodejs.org/api/v1'
 });
 
-export default Axios;
+export default request;

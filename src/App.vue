@@ -1,68 +1,105 @@
 <template>
   <div id="app">
-    <x-header
-      :right-options="{showMore: true}"
-      @on-click-more="isShowMoreMenus = true"
-      @on-click-title="routeToHome"
-    >cnode</x-header>
+    <x-header @on-click-more="showMoreMenus">
+      <a class="green" href="/#/topiclist/all">CNode社区</a>
+      <div slot="right" @click="showMoreMenus">
+        <a class="vux-header-more"></a>
+        <badge v-if="badgeText" :text="badgeText" style="margin-left: 3px;"></badge>
+      </div>
+    </x-header>
 
     <router-view></router-view>
-    <actionsheet :menus="moreMenus" v-model="isShowMoreMenus" @on-click-menu="handleClickMoreMenu"></actionsheet>
-      <vm-back-top></vm-back-top>
+    <actionsheet :menus="moreMenus" v-model="isShowMoreMenus" @on-click-menu="handleClickMoreMenus"></actionsheet>
+    <!-- scroll组件无法使用回顶部组件 -->
+    <vm-back-top></vm-back-top>
   </div>
 </template>
 
 <script>
-import { XHeader, Actionsheet } from "vux";
+import "github-markdown-css";
+import "./assets/style/markdown.css";
+import { XHeader, Actionsheet, Badge } from "vux";
 import { mapState, mapGetters, mapMutations } from "vuex";
-import VmBackTop from 'vue-multiple-back-top'
+import VmBackTop from "vue-multiple-back-top";
+
 export default {
   name: "app",
+
+  data() {
+    return {
+      badgeText: ""
+    };
+  },
+
+  // 持久化登录
+  created() {
+    var loginStatus = window.localStorage.getItem("loginStatus");
+    if (loginStatus) {
+      this.mutationLogin();
+      this.mutationLoginname(window.localStorage.getItem("loginname"));
+      this.mutationAccessToken(window.localStorage.getItem("accesstoken"));
+      this.mutationAuthorId(window.localStorage.getItem("author_id"));
+    }
+    // 定时操作，ajax获取未读消息个数
+    this.getUnreadMsgCount();
+    window.setInterval( () => {
+     this.getUnreadMsgCount();
+    }, 5 * 60 * 1000);
+  },
+
+  computed: {
+    ...mapState(["unLoginMenus", "LoginMenus", "isLogined"]),
+    // 数据要发生状态改变，需将isShowMoreMenus单独拉出来设置set属性触发mutation
+    isShowMoreMenus: {
+      get() {
+        return this.$store.state.isShowMoreMenus;
+      },
+      set(nval) {
+        // 触发mutation
+        this.$store.commit("mutationIsShowMoreMenus", nval);
+      }
+    },
+    ...mapGetters(["moreMenus"])
+  },
   components: {
     XHeader,
     Actionsheet,
-    VmBackTop
-  },
-  computed: {
-    ...mapGetters(["moreMenus"]),
-    ...mapState([
-      "topics",
-      "loginedMoreMenus",
-      "unLoginedMoreMenus",
-      "isLogined"
-    ]),
-    isShowMoreMenus: {
-      get: function() {
-        return this.$store.state.isShowMoreMenus;
-      },
-      set: function(nval) {
-        this.$store.commit("mutationsIsShowMoreMenus", nval);
-      }
-    }
-  },
-  data: function() {
-    return {};
+    VmBackTop,
+    Badge
   },
   methods: {
     ...mapMutations([
-      "mutationsLogin",
-      "mutationsLoginname",
-      "mutationsAccessToken"
+      "mutationLogin",
+      "mutationLoginname",
+      "mutationAccessToken",
+      "mutationAuthorId"
     ]),
-    routeToHome() {
-      this.$router.replace("/");
+
+    // // 点击标题跳转到默认主页
+    // routeToHome() {
+    //   this.$router.replace("/");
+    // },
+    // 头部菜单更多的设置方法
+    showMoreMenus() {
+      this.isShowMoreMenus = true;
+      // 不会直接赋值，而是将值传给isShowMoreMenus这个计算属性作为set的参数
     },
-    handleClickMoreMenu(menukey) {
+    handleClickMoreMenus(menukey, menuitem) {
       this.$router.push("/" + menukey);
-    }
-  },
-  created: function() {
-    // `this` 指向 vm 实例
-    loginStatus = window.localStorage.getItem("loginStatus");
-    if (loginStatus) {
-      this.mutationsLogin();
-      this.mutationsLoginname(window.localStorage.getItem("loginname"));
-      this.mutationsAccessToken(window.localStorage.getItem("accesstoken"));
+    },
+    // 获取服务端未读消息个数
+    getUnreadMsgCount() {
+      this.$http
+        .get("/message/count", {
+          params: {
+            accesstoken: this.$store.state.accesstoken
+          }
+        })
+        .then(resp => {
+          if (resp.data.success) {
+            this.badgeText = resp.data.data;
+          }
+        });
     }
   }
 };
@@ -70,8 +107,7 @@ export default {
 
 <style lang="less">
 @import "~vux/src/styles/reset.less";
-
-body {
-  background-color: #fbf9fe;
+.green {
+  color: rgb(255, 255, 255);
 }
 </style>

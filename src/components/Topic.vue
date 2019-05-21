@@ -1,301 +1,323 @@
 <template>
-  <div v-if="topic">
-    <article class="weui-article">
-      <div class="topic_header">
-        <div class="topic_title">{{ topic.title }}</div>
-        <ul>
-          <li>· 发表于{{ topic.create_at }}</li>
-
-          <li>· {{topic.visit_count}}次浏览</li>
-        </ul>
-        <div v-html="topic.content" class="topic_content markdown-body"></div>
-      </div>
-      <div id="reply">
-        <div class="topbar">回复</div>
-        <div v-if="topic.replies.length === 0" class="noReplyStyle">本文暂无评论...</div>
-        <div v-for="(reply,index) in topic.replies" :key="index" class="replySec">
-          <div class="replyUp">
-            <span>#{{index+1}}楼</span>
-            <span v-if="reply.ups.lenght>0">∆ {{ reply.ups.length}}</span>
-            <span v-else></span>
+  <!-- 只有topic为真时才显示主题信息 -->
+  <div v-if="topic" style="padding: 5px 8px;">
+    <article>
+      <section>
+        <h2 class="topic-title">
+          {{topic.title}}
+          <x-button
+            v-if="topic.author_id == $store.state.author_id"
+            type="primary"
+            :mini="true"
+            :link="'/topic/'+topic.id+'/edit'"
+          >编辑</x-button>
+          <x-button
+            v-if="topic.is_collect==false"
+            :mini="true"
+            type="primary"
+            @click.native="collect"
+          >收藏</x-button>
+          <x-button v-else :mini="true" @click.native="decollect">取消收藏</x-button>
+        </h2>
+      </section>
+      <section class="topic-msg">
+        <!-- /#/代表路由路径 -->
+        <div class="left" @click="$router.push('/#/user/'+topic.author.loginname)">
+          <img :src="topic.author.avatar_url||''" alt>
+          <div>
+            <p>{{topic.author.loginname}}</p>
+            <p>{{createAt}}</p>
           </div>
-          <p v-html="reply.content" class="replyContentStyle markdown-body"></p>
         </div>
-      </div>
+
+        <div class="right">
+          <p>{{topic.visit_count}} 次浏览</p>
+          <p class="tag">
+            来自:
+            {{tag}}
+          </p>
+        </div>
+      </section>
+      <section v-html="topic.content" class="markdown-body"></section>
     </article>
+    <h4 class="reply_count">
+      <b>{{topic.reply_count}}</b> 回复
+    </h4>
+
+    <div v-for="(item,index) in topic.replies" :key="index">
+      <flexbox>
+        <!-- :span是划分区域面积 -->
+        <flexboxItem :span="1/8">
+          <img :src="item.author.avatar_url" width="30" height="30" alt>
+        </flexboxItem>
+        <flexboxItem>
+          <div>
+            <a :href="'/#/user/'+item.author.loginname">{{item.author.loginname}}</a>
+            {{index+1}}楼
+          </div>
+        </flexboxItem>
+        <flexboxItem :span="1/4">
+          <span @click="upOrDown(item.id)">
+            <wechat-emotion>强</wechat-emotion>
+            {{item.ups.length}}
+          </span>
+          <span v-if="isLogined" @click="showPopup(item.id, item.author.loginname)">回复</span>
+        </flexboxItem>
+      </flexbox>
+      <div v-html="item.content" class="markdown-body"></div>
+    </div>
+
     <group>
-      <cell-box v-for="(item, index) in topic.replies" :key="index">
-        <flexbox>
-          <flexbox-item :span="1/10"></flexbox-item>
-          <flexbox-item></flexbox-item>
-          <flexbox-item :span="1/4">
-            <span>
-              <emotion>强</emotion>
-              {{item.ups.length}}
-            </span>
-            <span v-if="isLogined">回复</span>
-          </flexbox-item>
-        </flexbox>
-      </cell-box>
+      <x-textarea v-model="replyContent" placeholder="评论新内容"></x-textarea>
     </group>
-    <group>
-      <x-textarea :placeholder="评论内容" :rows="8" v-model="replyContent"></x-textarea>
-    </group>
-    <x-button mini type="primary" @click.native="addReply(1)">评论</x-button>
+    <x-button :mini="true" type="primary" @click.native="addReply(1)">回复</x-button>
+    <!-- 对评论的评论 -->
+    <div v-transfer-dom>
+      <popup v-model="isShowPopup" @on-hide="hidePopup">
+        <group>
+          <x-textarea v-model="replyContent" placeholder="请输入评论内容"></x-textarea>
+        </group>
+        <x-button :mini="true" type="primary" @click.native="addReply(2)">回复</x-button>
+      </popup>
+    </div>
   </div>
 </template>
 
 <script>
+import { calTime, titleVal } from "../util.js";
 import {
   Group,
-  CellBox,
-  Flexbox,
   FlexboxItem,
+  Flexbox,
   WechatEmotion,
+  XButton,
   XTextarea,
-  XButton
+  Popup,
+  TransferDom
 } from "vux";
 import { mapState } from "vuex";
 export default {
-  name: "topic",
+  name: "Topic",
+  // 接收父组件(路由组件)的id值
   props: ["id"],
-  components: {
-    Group,
-    CellBox,
-    Flexbox,
-    FlexboxItem,
-    WechatEmotion,
-    XTextarea,
-    XButton
-  },
-  data: function() {
+
+  data() {
     return {
       topic: null,
-      replyContent: ""
+      replyContent: "",
+      isShowPopup: false,
+      reply_id: null,
+      reply_loginname: ""
     };
   },
-  methods: {
-    // 评论
-    addReply(replyTab) {
-      this.$http
-        .post("/topic/" + this.topic.id + "/replies", {
-          accesstoken: this.$$store.state.accessToken,
-          content: this.replyContent
-        })
-        .then(res => {
-          if (res.success) {
-            this.tip("主题发布成功");
-            setTimeout(() => {
-              this.$router.push("/topiclist/dev");
-            }, 2000);
-          }
-        })
-        .catch(() => {
-          this.tip("主题发布失败,请重新发布!");
-        });
+
+  computed: {
+    ...mapState(["isLogined"]),
+    createAt() {
+      return "发布于:" + calTime(this.topic.create_at);
+    },
+    tag() {
+      return titleVal[this.topic.tab];
     }
   },
-  computed: {
-    ...mapState(["isLogined"])
+  components: {
+    Group,
+    XButton,
+    XTextarea,
+    FlexboxItem,
+    Flexbox,
+    WechatEmotion,
+    Popup
   },
-  beforeRouteEnter(to, from, next) {
+  directives: {
+    TransferDom
+  },
+  // ajax获取的数据应赋值给一个自定义的变量来调用
+  beforeRouteEnter: function(to, from, next) {
     next(function(vm) {
-      vm.$http.get("/topic/" + to.params.id).then(function(response) {
-        vm.topic = response.data.data;
-      });
+      vm.$http
+        .get("/topic/" + to.params.id, {
+          params: {
+            accesstoken: vm.$store.state.accesstoken
+          }
+        })
+        .then(function(resp) {
+          // console.log(resp.data);
+          // 注意区别data和data.data的区别
+          vm.topic = resp.data.data;
+        });
     });
   },
-  beforeRouteUpdate(to, from, next) {
-    var that = this;
-    this.$http.get("/topic/" + to.params.id).then(function(response) {
-      that.topic = response.data.data;
-    });
+  // 动态路由切换时，导航守卫
+  beforeRouteUpdate: function(to, from, next) {
+    this.$http
+      .get("/topic/" + to.params.id, {
+        params: {
+          accesstoken: this.$store.state.accesstoken
+        }
+      })
+      .then((resp)=> {
+        this.topic = resp.data.data;
+      });
+    next();
+  },
+
+  methods: {
+    // 新建评论
+    addReply(replyTab) {
+      // 根据replyTab值实现不同的评论功能
+      var params = {
+        accesstoken: this.$store.state.accesstoken,
+        content: this.replyContent
+      };
+      if (replyTab == 2) {
+        params.reply_id = this.reply_id;
+        // 构建@用户名形式的回复信息
+        params.content = "@" + this.reply_loginname + " " + params.content;
+      }
+      // 发送ajax请求
+      this.$http
+        .post("/topic/" + this.topic.id + "/replies", params)
+        .then(resp => {
+          if (resp.data && resp.data.success) {
+            var reply = {
+              id: resp.data.reply_id,
+              author: {
+                loginname: this.$store.state.loginname,
+                avatar_url: ""
+              },
+              content: params.content,
+              ups: [],
+              create_at: "2014-10-07",
+              reply_id: null,
+              is_uped: false
+            };
+            if (replyTab == 2) {
+              reply.reply_id = this.reply_id;
+            }
+            this.topic.replies.push(reply);
+            this.replyContent = "";
+            this.reply_id = null;
+            this.isShowPopup = false;
+            this.reply_loginname = "";
+          }
+        });
+    },
+    // 点击回复显示弹出框
+    showPopup(reply_id, loginname) {
+      this.isShowPopup = true;
+      this.reply_id = reply_id;
+      this.reply_loginname = loginname;
+    },
+    hidePopup() {
+      this.reply_id = "";
+      this.reply_loginname = "";
+    },
+    // 实现点赞或取消点赞
+    upOrDown(reply_id) {
+      this.$http
+        .post("/reply/" + reply_id + "/ups", {
+          accesstoken: this.$store.state.accesstoken
+        })
+        .then(resp => {
+          if (resp && resp.data && resp.data.success) {
+            var type = resp.data.action;
+            var reply;
+            // 先获取到当前评论
+            for (var i = 0; i <= this.topic.replies.length; i++) {
+              if (this.topic.replies[i].id == reply_id) {
+                // 找到了指定评论
+                reply = this.topic.replies[i];
+                break;
+              }
+            }
+            // 实现点赞功能
+            if (type == "up") {
+              // 在ups中添加当前用户的id值
+              reply.ups.push(this.$store.state.accesstoken);
+            }
+            // 取消点赞功能
+            else if (type == "down") {
+              // ？？实际过程中应该先找到指定元素的下标，然后再使用splice删除指定元素
+              reply.ups.pop();
+            }
+          }
+        });
+    },
+    // 实现收藏功能----500状态码错误,服务器内部错误
+    collect() {
+      this.$http
+        .post("/topic_collect/collect", {
+          accesstoken: this.$store.state.accesstoken,
+          topic_id: this.topic_id
+        })
+        .then(resp => {
+          if (resp.data && resp.data.success) {
+            this.topic.is_collect = true;
+          }
+        });
+    },
+    // 取消收藏
+    decollect() {
+      this.$http
+        .post("/topic_collect/de_collect", {
+          accesstoken: this.$store.state.accesstoken,
+          topic_id: this.topic_id
+        })
+        .then(resp => {
+          if (resp.data && resp.data.success) {
+            this.topic.is_collect = false;
+          }
+        });
+    }
   }
 };
 </script>
 
-<style lang="less" scoped>
-@import "~vux/src/styles/weui/weui.less";
-.noReplyStyle {
-  margin: 10px;
-  padding-bottom: 10px;
-  font-size: 12px;
-  color: #778087;
+<style lang="less">
+.topic {
+  word-break: break-word;
 }
-.topbar {
-  padding: 10px;
-  background-color: #f6f6f6;
-  height: 16px;
-  font-size: 12px;
-  margin-top: 10px;
+.markdown-body {
+  border-bottom: 1px solid #e0e0e0;
 }
-.article:not(:first-child) {
-  margin-right: 340px;
-  margin-top: 15px;
+.topic-title {
+  margin-bottom: 20px;
+  padding: 5px;
+  font-size: 18px;
+  background: #f0f0f0;
+  border-radius: 6px;
 }
-#reply,
-.topic_header {
-  background-color: #fff;
-}
-#reply {
-  margin-top: 15px;
-  margin-bottom: 15px;
-}
-.replyUserImg {
-  width: 30px;
-  height: 30px;
-  position: relative;
-  bottom: -9px;
-}
-.topic_header a,
-#reply a,
-#reply span {
+.topic-msg {
+  margin-bottom: 30px;
+  display: flex;
   font-size: 13px;
-  color: #666;
-  text-decoration: none;
-}
-.replySec {
-  border-bottom: 1px solid #e5e5e5;
-  padding: 0 10px;
-}
-.loading {
-  text-align: center;
-  padding-top: 300px;
-}
-.replyUp a:nth-of-type(2) {
-  margin-left: 0px;
-  display: inline-block;
-}
-.topic_header {
-  padding: 10px;
-}
-.topic_title {
-  font-size: 20px;
-  font-weight: bold;
-  padding-top: 8px;
-}
-.topic_header ul {
-  list-style: none;
-  padding: 0px 0px;
-  margin: 6px 0px;
-}
-.topic_header li {
-  display: inline-block;
-  font-size: 12px;
-  color: #838383;
-}
-.topic_content {
-  border-top: 1px solid #e5e5e5;
-  padding: 10px 10px;
-}
-.markdown-text img {
-  width: 92% !important;
-}
-.replyContentStyle {
-  padding: 10px 35px 0 35px;
-}
-@media screen and (max-width: 979px) {
-  .article:not(:first-child) {
-    margin: 10px 10px 10px;
+  line-height: 20px;
+  justify-content: space-between;
+  .left {
+    display: flex;
+    img {
+      margin-right: 5px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+  }
+  .right {
+    .tag {
+      background: rgb(75, 173, 218);
+      color: #fff;
+      text-align: center;
+      border-radius: 5px;
+    }
   }
 }
-body {
-  margin: 0;
-}
-.loader {
-  position: absolute;
-  top: 30%;
-  left: 25%;
-  margin-left: 10%;
-  transform: translate3d(-50%, -50%, 0);
-}
-.dot {
-  width: 24px;
-  height: 24px;
-  background: #3ac;
-  border-radius: 100%;
-  display: inline-block;
-  animation: slide 1s infinite;
-}
-.dot:nth-child(1) {
-  animation-delay: 0.1s;
-  background: #32aacc;
-}
-.dot:nth-child(2) {
-  animation-delay: 0.2s;
-  background: #64aacc;
-}
-.dot:nth-child(3) {
-  animation-delay: 0.3s;
-  background: #96aacc;
-}
-.dot:nth-child(4) {
-  animation-delay: 0.4s;
-  background: #c8aacc;
-}
-.dot:nth-child(5) {
-  animation-delay: 0.5s;
-  background: #faaacc;
-}
-@-moz-keyframes slide {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.3;
-    transform: scale(2);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@-webkit-keyframes slide {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.3;
-    transform: scale(2);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@-o-keyframes slide {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.3;
-    transform: scale(2);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@keyframes slide {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.3;
-    transform: scale(2);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@media screen and (max-width: 979px) {
-  .loading {
-    text-align: center;
-    padding-top: 100px;
-  }
-  .loader {
-    position: absolute;
-    top: 30%;
-    left: 35%;
-    margin-left: 10%;
-    transform: translate3d(-50%, -50%, 0);
+.reply_count {
+  padding: 15px 0;
+  border-bottom: 1px solid #e0e0e0;
+  b {
+    color: rgb(75, 218, 137);
   }
 }
 </style>
+

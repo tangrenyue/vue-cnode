@@ -1,77 +1,77 @@
 <template>
-  <div>
-    <h5>login</h5>
-    <group title="使用icon代替title">
-      <x-input placeholder="Access Token" v-model="accessToken"></x-input>
-    </group>
-    <x-button type="primary" @click.native="login">login</x-button>
-  </div>
+	<div>
+		<h3 class="lgcenter">用户登录</h3>
+		<group>
+			<!-- 哪些需要在group要分辨清 -->
+			<x-input placeholder="请输入access token" v-model="accesstoken"></x-input>
+		</group>
+		<div style="height:10px"></div>
+		<!-- click事件要添加.native -->
+		<x-button type="primary" @click.native="dologin">登录</x-button>
+		<toast type="text" v-model="isShowToast">{{ toastText }}</toast>
+	</div>
 </template>
 
 <script>
-import { Group, XButton, XInput } from "vux";
-import { mapMutations } from "vuex";
+	import { Group, XInput, XButton, Toast } from 'vux';
+	import { mapMutations } from 'vuex';
 
-export default {
-  name: "login",
+	export default{
+		name:"login",
 
-  components: {
-    Group,
-    XButton,
-    XInput
-  },
+		components:{
+			Group,
+			XInput,
+			XButton,
+			Toast
+		},
 
-  data() {
-    return {
-      accessToken: ""
-    };
-  },
+		data:function(){
+			return {
+				accesstoken: '',
+				toastText: '',
+				isShowToast: false
+			}
+		},
+		
+		methods: {
+			// mapMutations放在methods中使用
+			...mapMutations(['mutationLogin', 'mutationLoginname', 'mutationAccessToken', 'mutationAuthorId']),
+			
+			dologin() {
+				this.$http.post('/accesstoken',{
+					accesstoken: this.accesstoken
+				}).then(resp => {
+					// vuex中的数据保存于内存中，当前应用程序的生命周期结束vuex的数据就会丢失
+					// 用户持久化登录，localStorage或sessionStorage
+					if(resp&&resp.data&&resp.data.success){
+						// 保存数据到vuex
+						this.mutationLogin();
+						this.mutationAccessToken(this.accesstoken);
+						this.mutationLoginname(resp.data.loginname);
+						this.mutationAuthorId(resp.data.id);
+						//保存数据到localstorage
+						window.localStorage.setItem("loginStatus",true);
+						window.localStorage.setItem("accesstoken",this.accesstoken);
+						window.localStorage.setItem("loginname",resp.data.loginname);
+						window.localStorage.setItem("author_id",resp.data.id);
+						// 页面跳转
+						this.$router.push('/user/'+resp.data.loginname);
+					}
+				}).catch(err => {
+					// 显示错误信息
+					this.isShowToast = true;
+					this.toastText = err.response.data.error_msg;
+				})
+			}
+		}
 
-  methods: {
-    ...mapMutations([
-      "mutationsLogin",
-      "mutationsLoginname",
-      "mutationsAccessToken"
-    ]),
-
-    login() {
-      if (!this.accessToken) {
-        this.tip("access token不能为空");
-      } else {
-        this.$http
-          .post("/accesstoken", {
-            accesstoken: this.accessToken.trim()
-          })
-          .then(res => {
-            if (res.success) {
-              //
-              this.mutationsLogin();
-              this.mutationsLoginname(res.data.loginname);
-              this.mutationsAccessToken(this.accesstoken);
-              //
-              window.localStorage.setItem('loginStatus',true);
-              window.localStorage.setItem('loginname',res.data.loginname);
-              window.localStorage.setItem('accesstoken',this.accesstoken);
-              this.$router.push(`/user/${res.data.loginname}`);
-            }
-          })
-          .catch(e => {
-            this.tip(e.responseJSON.error_msg);
-          });
-      }
-    },
-    tip(message) {
-      var timer = null;
-      clearTimeout(timer);
-      this.message = message;
-      this.show = true;
-      timer = setTimeout(() => {
-        this.show = false;
-      }, 2000);
-    }
-  }
-};
+	}
 </script>
 
-<style>
+<style lang="less" scoped>
+	.lgcenter{
+		text-align: center;
+		padding-top: 15px;
+	}
 </style>

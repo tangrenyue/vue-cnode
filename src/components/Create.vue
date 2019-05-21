@@ -1,54 +1,73 @@
 <template>
   <div>
-    <h5>发表新话题</h5>
-
+    <!-- <h5>发表新话题</h5> -->
     <group>
-      <x-textarea :max="20" :placeholder="标题" :rows="1" v-model="title"></x-textarea>
-      <x-textarea :max="1000" :placeholder="内容" :rows="8" v-model="content"></x-textarea>
-      <x-button type="primary" @click.native="addTopic">发表新话题</x-button>
+      <x-textarea placeholder="标题" :max="200" :rows="1" v-model="title"></x-textarea>
     </group>
+    <mavon-editor v-model="content"></mavon-editor>
+ 
+    <x-button type="primary" @click.native="createTopic">添加新话题</x-button>
   </div>
 </template>
 
 <script>
-import { XTextarea, Group, XButton } from "vux";
+import { Group, XTextarea, XButton } from "vux";
+import { mavonEditor } from "mavon-editor";
+import "mavon-editor/dist/css/index.css";
+
 export default {
+  name: "Create",
+
   components: {
-    XTextarea,
     Group,
-    XButton
+    XTextarea,
+    XButton,
+    mavonEditor
   },
+
   data() {
     return {
-      tab: "",
       title: "",
-      content: ""
+      content: "",
+      toolbars: {
+        bold: true, // 粗体
+        italic: true, // 斜体
+        header: true, // 标题
+        underline: true, // 下划线
+        ol: true, // 有序列表
+        ul: true, // 无序列表
+        link: true, // 链接
+        imagelink: true, // 图片链接
+        code: true, // code
+        fullscreen: true, // 全屏编辑
+        htmlcode: true, // 展示html源码
+        help: true, // 帮助
+        alignleft: true, // 左对齐
+        aligncenter: true, // 居中
+        alignright: true, // 右对齐
+        preview: true // 预览
+      }
     };
   },
+
   methods: {
-    addTopic() {
+    createTopic() {
       this.$http
         .post("/topics", {
-          accesstoken: this.$$store.state.accessToken,
           title: this.title,
+          content: this.content,
           tab: "dev",
-          content: this.content
+          accesstoken: this.$store.state.accesstoken
         })
-        .then(res => {
-          if (res.success) {
-            this.tip("主题发布成功");
-            setTimeout(() => {
-              this.$router.push("/topiclist/dev");
-            }, 2000);
+        .then(resp => {
+          if (resp.data && resp.data.success) {
+            this.$router.replace("/topiclist/dev");
           }
-        })
-        .catch(() => {
-          this.tip("主题发布失败,请重新发布!");
         });
     }
   }
 };
 </script>
 
-<style>
+<style lang="less" scoped>
 </style>
